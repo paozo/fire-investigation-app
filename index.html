@@ -1211,7 +1211,7 @@
                              reader.onerror = () => {
                                 App.utils.customAlert('ファイルの読み込み中にエラーが発生しました。');
                             };
-                            reader.readAsText(file, 'Shift_JIS');
+                            reader.readAsText(file, 'utf-8');
                         },
                         async importCSV(csvString) {
                             try {
