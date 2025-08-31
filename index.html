@@ -1,0 +1,1641 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>火災調査サポートアプリ</title>
+    
+    <!-- PWA Manifest & Theme Color -->
+    <meta name="theme-color" content="#111827">
+
+    <!-- スタイルシートとフォント -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" xintegrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <style>
+        /* 基本設定 */
+        :root {
+            --font-size-base: 14px; --font-size-sm: 12px; --font-size-xs: 11px;
+            --font-size-lg: 16px; --font-size-xl: 18px; --font-size-2xl: 20px;
+        }
+        html.text-sm {
+            --font-size-base: 13px; --font-size-sm: 11px; --font-size-xs: 10px; --font-size-lg: 15px; --font-size-xl: 17px; --font-size-2xl: 19px;
+        }
+        html.text-lg {
+             --font-size-base: 16px; --font-size-sm: 14px; --font-size-xs: 13px; --font-size-lg: 18px; --font-size-xl: 20px; --font-size-2xl: 22px;
+        }
+        body { font-family: 'Inter', 'Noto Sans JP', sans-serif; -webkit-tap-highlight-color: transparent; font-size: var(--font-size-base); }
+        h2 { font-size: var(--font-size-xl); } h3 { font-size: var(--font-size-lg); }
+        .text-xs { font-size: var(--font-size-xs); } .text-sm { font-size: var(--font-size-sm); }
+        
+        /* スクロールバー */
+        ::-webkit-scrollbar { width: 8px; } ::-webkit-scrollbar-track { background: #1f2937; } ::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 4px; } ::-webkit-scrollbar-thumb:hover { background: #6b7280; }
+        
+        /* モーダルアニメーション */
+        .modal { transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out; }
+        .modal.hidden { opacity: 0; transform: scale(0.95); pointer-events: none; }
+        
+        /* 検索ハイライト */
+        .highlight { background-color: yellow; color: #1f2937; padding: 0 2px; border-radius: 2px; }
+        .current-highlight { outline: 2px solid #f97316; scroll-margin-top: 150px; }
+        
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        
+        /* チェックボックス */
+        .item-checkbox, .nav-item-checkbox { transform: scale(1.0); margin-right: 8px; accent-color: #3b82f6; }
+        
+        /* キーワードタグ */
+        .keyword-tag, .content-keyword-tag { cursor: pointer; transition: background-color 0.2s ease, color 0.2s ease; }
+        .keyword-tag.active, .content-keyword-tag.active { background-color: yellow; color: #1f2937; font-weight: bold; }
+        
+        /* ナビゲーションアイテム */
+        .nav-item { padding-left: 0.75rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: background-color 0.2s ease, color 0.2s ease; padding-top: 0.5rem; padding-bottom: 0.5rem; }
+        .nav-item.active-nav { background-color: #2563eb; color: white; }
+        
+        /* ヘッダーのOR/ANDスイッチ */
+        #logic-switch-container {
+            position: relative;
+            display: inline-flex;
+            background-color: #374151; /* gray-700 */
+            border-radius: 9999px;
+            padding: 4px;
+            cursor: pointer;
+            user-select: none;
+        }
+        .switch-label {
+            padding: 2px 12px;
+            font-weight: 600;
+            font-size: var(--font-size-sm);
+            color: #d1d5db; /* gray-300 */
+            transition: color 0.2s ease-in-out;
+            z-index: 10;
+        }
+        .switch-label.active-logic {
+            color: #ffffff;
+        }
+        #switch-bg {
+            position: absolute;
+            top: 4px;
+            bottom: 4px;
+            background-color: #3b82f6; /* blue-600 */
+            border-radius: 9999px;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            width: calc(50% - 4px);
+            left: 4px;
+        }
+        #logic-switch-container[data-mode="AND"] #switch-bg {
+            transform: translateX(100%);
+        }
+
+        /* 状態別ボタンスタイル */
+        #keywords-panel-toggle-btn.active, #filter-favorites-btn.active { color: #fBBF24; }
+        .font-size-btn.active, .keyword-sort-btn.active { background-color: #2563eb; color: white; }
+       
+        /* アイコンアニメーション */
+        .toggle-chevron { transition: transform 0.2s ease-in-out; }
+        .toggle-chevron.collapsed { transform: rotate(-180deg); }
+
+        /* ドラッグ&ドロップ */
+        .subitem-form-group.dragging { opacity: 0.4; }
+        .subitem-form-group .drag-handle { cursor: grab; }
+        
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 antialiased text-sm">
+
+    <div id="app" class="flex h-screen overflow-hidden">
+        <!-- サイドナビゲーション -->
+        <nav id="jump-nav" class="w-48 bg-gray-800 p-2 overflow-y-auto flex flex-col fixed top-0 left-0 h-full z-40 transform -translate-x-full transition-transform md:relative md:w-40 md:translate-x-0 shadow-lg">
+            <div id="nav-scroll-area" class="flex-1 overflow-y-auto">
+                <!-- Nav items will be injected here -->
+            </div>
+        </nav>
+        <div id="sidebar-backdrop" class="hidden fixed inset-0 bg-black bg-opacity-50 z-30 md:hidden"></div>
+
+        <main class="flex-1 flex flex-col">
+            <!-- ヘッダー -->
+            <header class="bg-gray-800/50 backdrop-blur-sm p-2 md:p-3 sticky top-0 z-20 shadow-lg">
+                <div class="flex flex-wrap items-center gap-2">
+                    <button id="sidebar-toggle-btn" class="p-2 text-white hover:text-blue-400 flex-shrink-0" aria-label="ナビゲーションを開く"><i class="fas fa-bars fa-lg"></i></button>
+                    
+                    <input type="text" id="temp-memo" placeholder="一時メモ..." class="flex-grow min-w-[120px] bg-gray-700 text-white placeholder-gray-400 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500" aria-label="一時メモ">
+
+                    <div class="flex items-center bg-gray-700 rounded-lg relative flex-grow">
+                        <input type="text" id="search-input" placeholder="キーワード検索..." class="w-full bg-transparent text-white placeholder-gray-400 rounded-lg py-2 pl-4 pr-24 focus:outline-none" aria-label="項目検索">
+                        <div class="absolute right-2 top-1/2 -translate-y-1/2 flex items-center h-full">
+                            <button id="search-clear-btn" class="text-gray-400 hover:text-white px-2 h-full flex items-center" title="検索文字のクリア" aria-label="検索文字のクリア"><i class="fas fa-times"></i></button>
+                            <div class="h-4 border-l border-gray-600"></div>
+                             <span id="filtered-item-count" class="font-mono text-white w-12 text-center text-sm" title="絞り込まれた項目数">0</span>
+                        </div>
+                    </div>
+                    
+                    <div class="flex items-center text-gray-200 bg-gray-700 rounded-lg">
+                        <button id="search-prev-btn" class="p-3 hover:bg-gray-600 disabled:text-gray-500 disabled:cursor-not-allowed rounded-l-lg" title="前の検索結果へ"><i class="fas fa-chevron-left"></i></button>
+                        <span id="search-count" class="text-sm font-mono px-2 border-x border-gray-600">0/0</span>
+                        <button id="search-next-btn" class="p-3 hover:bg-gray-600 disabled:text-gray-500 disabled:cursor-not-allowed rounded-r-lg" title="次の検索結果へ"><i class="fas fa-chevron-right"></i></button>
+                    </div>
+
+                    <div class="relative">
+                        <button id="search-history-btn" class="bg-gray-700 text-gray-400 hover:text-white p-3 rounded-lg flex items-center justify-center" title="検索履歴の表示" aria-label="検索履歴の表示"><i class="fas fa-history"></i></button>
+                        <div id="search-history-dropdown" class="hidden absolute top-full right-0 mt-2 w-48 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-30"></div>
+                    </div>
+                    
+                    <div class="flex-grow"></div>
+                    
+                    <!-- Right-aligned action buttons -->
+                    <div id="action-buttons-group" class="flex items-center gap-2">
+                        <div id="logic-switch-container" data-mode="OR" title="キーワードの検索ロジック (OR: いずれかを含む / AND: すべてを含む)">
+                            <div id="switch-bg"></div>
+                            <span class="switch-label active-logic">OR</span>
+                            <span class="switch-label">AND</span>
+                        </div>
+                        <button id="add-new-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-3 rounded-lg flex-shrink-0" title="新規追加"><i class="fas fa-plus"></i></button>
+                        <button id="filter-favorites-btn" class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-3 rounded-lg flex-shrink-0" title="お気に入りフィルター" aria-label="お気に入りフィルター"><i class="fas fa-star"></i></button>
+                        <button id="clear-selections-btn" class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-3 rounded-lg flex-shrink-0" title="選択をすべて解除"><i class="fas fa-check-double"></i></button>
+                        <button id="settings-btn" class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-3 rounded-lg flex-shrink-0" title="設定"><i class="fas fa-cog"></i></button>
+                       
+                        <div class="h-6 border-l border-gray-600 mx-1"></div>
+                        
+                        <button id="random-item1-btn" class="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-3 rounded-lg flex-shrink-0 hidden" title="項目1をランダム表示" aria-label="項目1をランダム表示"><i class="fas fa-dice-d20"></i></button>
+                        <button id="random-item2-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-3 rounded-lg flex-shrink-0 hidden" title="項目2をランダム表示" aria-label="項目2をランダム表示"><i class="fas fa-dice"></i></button>
+                        
+                        <button id="keywords-panel-toggle-btn" class="bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-3 rounded-lg flex-shrink-0" aria-label="キーワードパネルを開く"><i class="fas fa-tags fa-lg"></i></button>
+                    </div>
+                </div>
+            </header>
+            <!-- メインコンテンツ -->
+            <div id="content-area" class="flex-1 overflow-y-auto p-2 sm:p-4">
+                 <div id="loading" class="text-center p-8">
+                    <i class="fas fa-spinner fa-spin text-4xl text-blue-500"></i>
+                    <p class="mt-4 text-gray-400">データを読み込んでいます...</p>
+                </div>
+            </div>
+            
+            <footer class="bg-gray-800 p-2 text-center text-xs text-gray-500">
+                UserID: <span id="user-id-display">未ログイン</span>
+            </footer>
+        </main>
+
+        <!-- キーワードパネル -->
+        <aside id="keywords-panel-right" class="w-64 bg-gray-800 flex flex-col fixed top-0 right-0 h-full z-40 transform translate-x-full transition-transform shadow-lg">
+            <div class="p-4 border-b border-gray-700 flex justify-between items-center">
+                <h3 class="text-lg font-bold text-white">キーワードフィルター</h3>
+                <button id="keywords-panel-close-btn" class="text-gray-400 hover:text-white"><i class="fas fa-times fa-lg"></i></button>
+            </div>
+            <div id="keywords-panel-content-area" class="flex-1 p-4 space-y-4 overflow-y-auto"></div>
+        </aside>
+        <div id="keywords-panel-backdrop" class="hidden fixed inset-0 bg-black bg-opacity-50 z-30"></div>
+    </div>
+
+    <!-- Modals -->
+    <div id="settings-modal" class="modal hidden fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
+         <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-md text-gray-200">
+            <header class="p-4 border-b border-gray-700 flex justify-between items-center">
+                <h2 class="text-xl font-bold text-gray-300 flex items-center"><i class="fas fa-cog mr-3"></i>設定</h2>
+                <button id="settings-modal-close-btn" class="text-gray-400 hover:text-white"><i class="fas fa-times fa-lg"></i></button>
+            </header>
+            <main class="p-6 space-y-6">
+                <div>
+                    <h3 class="font-semibold mb-2">セッションリセット</h3>
+                    <button id="next-case-btn" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center">
+                        <i class="fas fa-arrow-right-to-bracket mr-2"></i>次のセッションへ
+                    </button>
+                </div>
+                <div>
+                    <h3 class="font-semibold mb-2">データ管理</h3>
+                    <div class="space-y-2">
+                        <button id="export-csv-btn" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg"><i class="fas fa-file-csv mr-2"></i>CSVエクスポート</button>
+                        <button id="import-csv-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg"><i class="fas fa-file-import mr-2"></i>CSVインポート</button>
+                        <input type="file" id="import-csv-input" class="hidden" accept=".csv">
+                    </div>
+                </div>
+                <div>
+                    <h3 class="font-semibold mb-2">表示設定</h3>
+                    <div class="bg-gray-700/50 p-4 rounded-lg space-y-4">
+                         <div class="flex items-center justify-between">
+                            <label for="show-random-btn-toggle" class="font-medium">ランダム表示ボタンを表示</label>
+                            <label class="relative inline-flex items-center cursor-pointer">
+                                <input type="checkbox" id="show-random-btn-toggle" class="sr-only peer">
+                                <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                            </label>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="font-medium">フォントサイズ</span>
+                            <div id="font-size-controls" class="flex items-center bg-gray-600 rounded-lg p-1">
+                                <button data-size="sm" class="font-size-btn px-3 py-1 text-sm rounded-md hover:bg-gray-500">小</button>
+                                <button data-size="base" class="font-size-btn px-3 py-1 text-sm rounded-md hover:bg-gray-500 active">中</button>
+                                <button data-size="lg" class="font-size-btn px-3 py-1 text-sm rounded-md hover:bg-gray-500">大</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+         </div>
+    </div>
+    
+    <div id="data-modal" class="modal hidden fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
+         <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+            <header class="p-4 border-b border-gray-700 flex justify-between items-center">
+                <h2 id="modal-title" class="text-xl font-bold"></h2>
+                <button id="modal-close-btn" class="text-gray-400 hover:text-white"><i class="fas fa-times fa-lg"></i></button>
+            </header>
+            <main class="p-4 flex-1 overflow-y-auto">
+                <form id="data-form" class="space-y-4">
+                    <input type="hidden" id="entry-id">
+                    <div>
+                        <label for="item1-name" class="block font-medium mb-1">項目1</label>
+                        <input type="text" id="item1-name" class="w-full bg-gray-700 p-2 rounded-md" required>
+                    </div>
+                     <div>
+                        <label for="item1-description" class="block font-medium mb-1">項目1の説明</label>
+                        <textarea id="item1-description" rows="2" class="w-full bg-gray-700 p-2 rounded-md"></textarea>
+                    </div>
+                    <div>
+                        <label for="item1-memo" class="block font-medium mb-1">項目1のメモ</label>
+                        <textarea id="item1-memo" rows="2" class="w-full bg-gray-700 p-2 rounded-md"></textarea>
+                    </div>
+                    <div class="border-t border-gray-700 pt-4">
+                        <h3 class="text-lg font-semibold mb-2">項目2</h3>
+                        <div id="subitems-container" class="space-y-4"></div>
+                        <button type="button" id="add-subitem-btn" class="mt-4 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg"><i class="fas fa-plus mr-2"></i>項目2を追加</button>
+                    </div>
+                </form>
+            </main>
+            <footer class="p-4 border-t border-gray-700 flex justify-between">
+                <button type="button" id="delete-btn" class="bg-red-800 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg">削除</button>
+                <button type="submit" form="data-form" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg">保存</button>
+            </footer>
+        </div>
+    </div>
+    
+    <div id="confirm-modal" class="modal hidden fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-4">
+        <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-sm">
+            <div class="p-6 text-center">
+                <div id="alert-icon" class="mx-auto mb-4"></div>
+                <h3 id="confirm-title" class="text-lg font-bold mb-2"></h3>
+                <p id="confirm-message" class="text-sm text-gray-300"></p>
+            </div>
+            <div id="confirm-buttons" class="bg-gray-700/50 p-4 flex justify-end gap-3 rounded-b-lg"></div>
+        </div>
+    </div>
+    
+    <div id="compare-modal" class="modal hidden fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-4">
+        <div class="bg-gray-800 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+            <header class="p-4 border-b border-gray-700 flex justify-between items-center">
+                <h2 class="text-xl font-bold text-indigo-400 flex items-center"><i class="fas fa-exchange-alt mr-3"></i>項目2の比較</h2>
+                <button id="compare-modal-close-btn" class="text-gray-400 hover:text-white"><i class="fas fa-times fa-lg"></i></button>
+            </header>
+            <main id="compare-modal-body" class="p-4 flex-1 overflow-y-auto"></main>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js";
+        import { getFirestore, collection, onSnapshot, doc, addDoc, setDoc, deleteDoc, getDocs, writeBatch, updateDoc } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-auth.js";
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const App = {
+                // アプリケーションの設定
+                config: {
+                    collectionName: 'fire_investigation_cases',
+                    maxHistoryItems: 15,
+                    storageKeys: {
+                        showRandomBtn: `fire_app_show_random_button`,
+                        fontSize: `fire_app_font_size`,
+                        tempMemo: `fire_app_temp_memo`,
+                        keywordMode: `fire_app_keyword_mode`
+                    },
+                    swipeThreshold: 50,
+                    firebaseConfig: null,
+                    appId: 'default-app-id',
+                },
+                // アプリケーションの状態
+                state: {
+                    db: null, auth: null, userId: null, dataStore: [], isLoading: true,
+                    intersectionObserver: null,
+                    filters: { searchTerm: '', activeKeywords: new Set(), keywordMode: 'OR', isFavoritesOnly: false, keywordSortBy: 'name' },
+                    ui: { selectedItems: new Set(), highlightedElements: [], currentHighlightIndex: -1 },
+                    sidebar: { touchStartX: 0, touchCurrentX: 0, isDragging: false },
+                    globalKeywordCounts: new Map(),
+                },
+                // 初期化処理
+                init() {
+                    this.cacheDomElements();
+                    this.utils.initFirebaseConfig();
+                    this.services.auth.init();
+                    this.bindEventListeners();
+                    Object.values(this.components).forEach(component => component.init?.());
+                },
+                // DOM要素のキャッシュ
+                cacheDomElements() {
+                    const D = document;
+                    this.elements = {
+                        // General
+                        html: D.documentElement, body: D.body, app: D.getElementById('app'),
+                        contentArea: D.getElementById('content-area'),
+                        loading: D.getElementById('loading'),
+                        userIdDisplay: D.getElementById('user-id-display'),
+                        // Sidebar
+                        jumpNav: D.getElementById('jump-nav'),
+                        navScrollArea: D.getElementById('nav-scroll-area'),
+                        sidebarToggleBtn: D.getElementById('sidebar-toggle-btn'),
+                        sidebarBackdrop: D.getElementById('sidebar-backdrop'),
+                        // Header Buttons
+                        addNewBtn: D.getElementById('add-new-btn'),
+                        filterFavoritesBtn: D.getElementById('filter-favorites-btn'),
+                        clearSelectionsBtn: D.getElementById('clear-selections-btn'),
+                        settingsBtn: D.getElementById('settings-btn'),
+                        logicSwitchContainer: D.getElementById('logic-switch-container'),
+                        // Keywords Panel (Right)
+                        keywordsPanelRight: D.getElementById('keywords-panel-right'),
+                        keywordsPanelToggleBtn: D.getElementById('keywords-panel-toggle-btn'),
+                        keywordsPanelCloseBtn: D.getElementById('keywords-panel-close-btn'),
+                        keywordsPanelBackdrop: D.getElementById('keywords-panel-backdrop'),
+                        keywordsPanelContentArea: D.getElementById('keywords-panel-content-area'),
+                        // Header
+                        tempMemo: D.getElementById('temp-memo'),
+                        randomItem1Btn: D.getElementById('random-item1-btn'),
+                        randomItem2Btn: D.getElementById('random-item2-btn'),
+                        // Search
+                        searchInput: D.getElementById('search-input'),
+                        searchClearBtn: D.getElementById('search-clear-btn'),
+                        searchHistoryBtn: D.getElementById('search-history-btn'),
+                        searchHistoryDropdown: D.getElementById('search-history-dropdown'),
+                        searchCount: D.getElementById('search-count'),
+                        searchPrevBtn: D.getElementById('search-prev-btn'),
+                        searchNextBtn: D.getElementById('search-next-btn'),
+                        filteredItemCount: D.getElementById('filtered-item-count'),
+                        // Settings Modal
+                        settingsModal: D.getElementById('settings-modal'),
+                        settingsModalCloseBtn: D.getElementById('settings-modal-close-btn'),
+                        exportCsvBtn: D.getElementById('export-csv-btn'),
+                        importCsvBtn: D.getElementById('import-csv-btn'),
+                        importCsvInput: D.getElementById('import-csv-input'),
+                        showRandomBtnToggle: D.getElementById('show-random-btn-toggle'),
+                        fontSizeControls: D.getElementById('font-size-controls'),
+                        nextCaseBtn: D.getElementById('next-case-btn'),
+                        // Data Modal
+                        dataModal: D.getElementById('data-modal'),
+                        modalTitle: D.getElementById('modal-title'),
+                        dataForm: D.getElementById('data-form'),
+                        modalCloseBtn: D.getElementById('modal-close-btn'),
+                        addSubItemBtn: D.getElementById('add-subitem-btn'),
+                        deleteBtn: D.getElementById('delete-btn'),
+                        entryIdInput: D.getElementById('entry-id'),
+                        item1NameInput: D.getElementById('item1-name'),
+                        item1DescInput: D.getElementById('item1-description'),
+                        item1MemoInput: D.getElementById('item1-memo'),
+                        subItemsContainer: D.getElementById('subitems-container'),
+                        // Confirm Modal
+                        confirmModal: D.getElementById('confirm-modal'),
+                        confirmTitle: D.getElementById('confirm-title'),
+                        confirmMessage: D.getElementById('confirm-message'),
+                        confirmButtons: D.getElementById('confirm-buttons'),
+                        alertIcon: D.getElementById('alert-icon'),
+                        // Compare Modal
+                        compareModal: D.getElementById('compare-modal'),
+                        compareModalCloseBtn: D.getElementById('compare-modal-close-btn'),
+                        compareModalBody: D.getElementById('compare-modal-body'),
+                    };
+                },
+                // イベントリスナーの紐付け
+                bindEventListeners() {
+                    const { elements: el, handlers: h } = this;
+                    
+                    el.searchInput.addEventListener('input', () => h.handleSearch());
+                    el.searchClearBtn.addEventListener('click', () => h.handleSearchClear());
+                    el.searchNextBtn.addEventListener('click', () => this.renderer.search.navigateToHighlight(1));
+                    el.searchPrevBtn.addEventListener('click', () => this.renderer.search.navigateToHighlight(-1));
+                    
+                    el.contentArea.addEventListener('click', e => h.handleContentAreaClick(e));
+                    el.contentArea.addEventListener('change', e => h.handleCheckboxChange(e));
+                    el.navScrollArea.addEventListener('change', e => h.handleCheckboxChange(e));
+
+                    el.addNewBtn.addEventListener('click', () => this.components.dataModal.openForNew());
+                    el.filterFavoritesBtn.addEventListener('click', () => h.handleToggleFavoritesFilter());
+                    el.clearSelectionsBtn.addEventListener('click', () => h.handleClearAllSelections());
+                    el.settingsBtn.addEventListener('click', () => this.components.settings.open());
+
+                    el.randomItem1Btn.addEventListener('click', () => h.handleRandomItem1Select());
+                    el.randomItem2Btn.addEventListener('click', () => h.handleRandomItem2Select());
+                    el.logicSwitchContainer.addEventListener('click', () => h.handleKeywordLogicToggle());
+                    
+                    document.addEventListener('click', e => {
+                        if (el.searchHistoryBtn && !el.searchHistoryBtn.parentElement.contains(e.target)) this.utils.hide(el.searchHistoryDropdown);
+                    });
+                    
+                    Object.values(this.components).forEach(component => component.bindEventListeners?.());
+                },
+                // イベントハンドラ
+                handlers: {
+                    handleSearch() {
+                        App.state.filters.activeKeywords.clear();
+                        const searchTerm = App.elements.searchInput.value.trim();
+                        App.state.filters.searchTerm = searchTerm;
+                        if (searchTerm) App.components.searchHistory.save(searchTerm);
+                        App.renderer.renderAll();
+                    },
+                    handleSearchClear() {
+                        App.elements.searchInput.value = '';
+                        this.handleSearch();
+                    },
+                    handleRandomItem1Select() {
+                        const allItem1Cards = App.elements.contentArea.querySelectorAll('.content-card');
+                        if (allItem1Cards.length > 0) {
+                            const randomIndex = Math.floor(Math.random() * allItem1Cards.length);
+                            allItem1Cards[randomIndex].scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        }
+                    },
+                    handleRandomItem2Select() {
+                        const allItem2Elements = App.elements.contentArea.querySelectorAll('.content-card .pl-4.border-l-4');
+                        if(allItem2Elements.length > 0) {
+                            const randomIndex = Math.floor(Math.random() * allItem2Elements.length);
+                            allItem2Elements[randomIndex].scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        }
+                    },
+                    handleToggleFavoritesFilter() {
+                        App.state.filters.isFavoritesOnly = !App.state.filters.isFavoritesOnly;
+                        App.elements.filterFavoritesBtn.classList.toggle('active', App.state.filters.isFavoritesOnly);
+                        App.renderer.renderAll();
+                    },
+                    handleContentAreaClick(event) {
+                        const { target } = event;
+                        const actions = {
+                            'edit-btn': el => App.components.dataModal.openForEdit(el.dataset.id),
+                            'favorite-btn': el => App.services.db.toggleFavorite('item1', el.dataset.id),
+                            'favorite-subitem-btn': el => App.services.db.toggleFavorite('item2', el.dataset.item1Id, el.dataset.item2Name),
+                            'content-keyword-tag': el => this.handleKeywordTagClick(el.textContent.trim()),
+                        };
+                        for (const className in actions) {
+                            const el = target.closest(`.${className}`);
+                            if (el) {
+                                actions[className](el);
+                                return;
+                            }
+                        }
+                    },
+                    handleKeywordTagClick(keyword) {
+                        const keywordName = keyword.replace(/\s\(\d+\)$/, '').trim();
+                        const { activeKeywords } = App.state.filters;
+                        if (activeKeywords.has(keywordName)) activeKeywords.delete(keywordName);
+                        else activeKeywords.add(keywordName);
+                        App.state.filters.searchTerm = '';
+                        App.elements.searchInput.value = '';
+                        App.renderer.renderAll();
+                    },
+                    handleCheckboxChange(event) {
+                        const checkbox = event.target;
+                        if (!checkbox.classList.contains('item-checkbox') && !checkbox.classList.contains('nav-item-checkbox')) return;
+                        
+                        const { type, id, name } = checkbox.dataset;
+                        const uniqueId = type === 'item1' ? `c_${id}` : `d_${id}_${name.replace(/\s/g, '_')}`;
+                        
+                        if (checkbox.checked) {
+                            App.state.ui.selectedItems.add(uniqueId);
+                        } else {
+                            App.state.ui.selectedItems.delete(uniqueId);
+                        }
+                        
+                        const allCheckboxes = document.querySelectorAll(`.item-checkbox[data-id='${id}']${name ? `[data-name='${name}']` : ''}, .nav-item-checkbox[data-id='${id}']`);
+                        allCheckboxes.forEach(cb => { if (cb.checked !== checkbox.checked) cb.checked = checkbox.checked; });
+                        
+                        App.renderer.renderAll();
+                    },
+                    handleKeywordLogicToggle() {
+                        const { filters } = App.state;
+                        filters.keywordMode = filters.keywordMode === 'OR' ? 'AND' : 'OR';
+                        App.utils.saveToStorage(App.config.storageKeys.keywordMode, filters.keywordMode);
+                        App.renderer.renderKeywordSwitch();
+                        App.renderer.renderAll();
+                    },
+                    handleClearKeywordFilter() {
+                        App.state.filters.activeKeywords.clear();
+                        App.renderer.renderAll();
+                    },
+                    handleClearAllSelections() {
+                        App.state.ui.selectedItems.clear();
+                        document.querySelectorAll('.item-checkbox, .nav-item-checkbox').forEach(cb => cb.checked = false);
+                        App.renderer.renderAll();
+                    },
+                },
+                // 外部サービス（Firebase）
+                services: {
+                    auth: {
+                        init() {
+                            try {
+                                const app = initializeApp(App.config.firebaseConfig);
+                                App.state.db = getFirestore(app);
+                                App.state.auth = getAuth(app);
+                                this.listen();
+                            } catch (error) {
+                                console.error("Firebase Initialization Failed:", error);
+                                App.elements.loading.innerHTML = `<p class="text-red-500 p-8">アプリケーションの初期化に失敗しました。</p>`;
+                            }
+                        },
+                        listen() {
+                            onAuthStateChanged(App.state.auth, async (user) => {
+                                if (user) {
+                                    App.state.userId = user.uid;
+                                    App.elements.userIdDisplay.textContent = user.uid;
+                                    App.services.db.listenForChanges();
+                                } else {
+                                    App.elements.userIdDisplay.textContent = "匿名ログイン中...";
+                                    await this.signIn();
+                                }
+                            });
+                        },
+                        async signIn() {
+                             try {
+                                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                                    await signInWithCustomToken(App.state.auth, __initial_auth_token);
+                                } else {
+                                    await signInAnonymously(App.state.auth);
+                                }
+                            } catch (error) {
+                                console.error("Authentication failed:", error);
+                                if (App.elements.loading) App.elements.loading.innerHTML = '<p class="text-red-500">Authentication Failed.</p>';
+                            }
+                        }
+                    },
+                    db: {
+                        getCollectionRef() {
+                            const { db, userId } = App.state;
+                            const { appId, collectionName } = App.config;
+                            if (!userId) return null;
+                            return collection(db, 'artifacts', appId, 'users', userId, collectionName);
+                        },
+                        listenForChanges() {
+                            const collectionRef = this.getCollectionRef();
+                            if (!collectionRef) return;
+                            onSnapshot(collectionRef, (snapshot) => {
+                                App.utils.hide(App.elements.loading);
+                                App.state.isLoading = false;
+                                
+                                const docs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                                App.state.dataStore = docs;
+                
+                                App.renderer.renderAll();
+                            }, (error) => {
+                                console.error("Error fetching data:", error);
+                                if (App.elements.loading) App.elements.loading.innerHTML = '<p class="text-red-500">データの取得に失敗しました。</p>';
+                            });
+                        },
+                        async toggleFavorite(type, id, item2Name = null) {
+                            const entryIndex = App.state.dataStore.findIndex(e => e.id === id);
+                            if (entryIndex === -1) return;
+                            
+                            const entry = { ...App.state.dataStore[entryIndex] };
+                            const collectionRef = this.getCollectionRef();
+                            if (!collectionRef) return;
+                            const docRef = doc(collectionRef, id);
+
+                            let updatePayload = {
+                                updatedAt: new Date().toISOString()
+                            };
+
+                            if(type === 'item1') {
+                                entry.isFavorite = !entry.isFavorite;
+                                updatePayload.isFavorite = entry.isFavorite;
+                            } else {
+                                entry.subItems = entry.subItems.map(d => {
+                                    if(d.name === item2Name) {
+                                        return {...d, isFavorite: !d.isFavorite};
+                                    }
+                                    return d;
+                                });
+                                updatePayload.subItems = entry.subItems;
+                            }
+                            
+                            App.state.dataStore[entryIndex] = entry;
+                            App.renderer.renderAll();
+                
+                            try {
+                                await updateDoc(docRef, updatePayload);
+                            } catch (error) {
+                                console.error("Error updating favorite status:", error);
+                                App.state.dataStore[entryIndex] = App.state.dataStore.find(e => e.id === id);
+                                App.renderer.renderAll();
+                                App.utils.customAlert("お気に入り状態の更新に失敗しました。");
+                            }
+                        },
+                    }
+                },
+                // 描画関連
+                renderer: {
+                    renderAll() {
+                        const dataToRender = this.filterAndSortData();
+                        const subItemCount = dataToRender.reduce((acc, entry) => acc + (entry.subItems ? entry.subItems.length : 0), 0);
+                        App.elements.filteredItemCount.textContent = subItemCount;
+
+                        this.updateGlobalKeywordCounts(dataToRender);
+                        this.renderContent(dataToRender);
+                        this.renderNav();
+                        this.renderKeywordsPanel(dataToRender);
+                        this.search.collectAndNavigateHighlights();
+                        this.setupIntersectionObserver();
+                    },
+                    updateGlobalKeywordCounts(data) {
+                        App.state.globalKeywordCounts.clear();
+                        data.forEach(entry => {
+                            (entry.subItems || []).forEach(d => {
+                                (d.keywords || []).forEach(k => {
+                                    App.state.globalKeywordCounts.set(k, (App.state.globalKeywordCounts.get(k) || 0) + 1);
+                                });
+                            });
+                        });
+                    },
+                    filterAndSortData() {
+                        const { dataStore, filters, ui } = App.state;
+                        let processedData = JSON.parse(JSON.stringify(dataStore));
+                    
+                        const selectedItem1Ids = new Set();
+                        ui.selectedItems.forEach(item => {
+                            if (item.startsWith('c_')) {
+                                selectedItem1Ids.add(item.split('_')[1]);
+                            }
+                        });
+                    
+                        if (selectedItem1Ids.size > 0) {
+                            processedData = processedData.filter(entry => selectedItem1Ids.has(entry.id));
+                        }
+                    
+                        if (filters.isFavoritesOnly) {
+                             processedData = processedData.map(entry => {
+                                const favoriteSubItems = (entry.subItems || []).filter(d => d.isFavorite);
+                                if (entry.isFavorite) return entry;
+                                if (favoriteSubItems.length > 0) return { ...entry, subItems: favoriteSubItems };
+                                return null;
+                            }).filter(Boolean);
+                        }
+                        
+                        if (filters.activeKeywords.size > 0) {
+                            const activeKeywords = Array.from(filters.activeKeywords);
+                             processedData = processedData.map(entry => {
+                                const matchingSubItems = (entry.subItems || []).filter(d => {
+                                    const keywords = d.keywords || [];
+                                    return filters.keywordMode === 'OR'
+                                        ? activeKeywords.some(filter => keywords.includes(filter))
+                                        : activeKeywords.every(filter => keywords.includes(filter));
+                                });
+                                if (matchingSubItems.length > 0) return { ...entry, subItems: matchingSubItems };
+                                return null;
+                            }).filter(Boolean);
+                        } else if (filters.searchTerm) {
+                            const keywords = filters.searchTerm.trim().toLowerCase().split(/\s+/).filter(Boolean);
+                            if (keywords.length > 0) {
+                                 processedData = processedData.map(entry => {
+                                    const matchingSubItems = (entry.subItems || []).filter(subItem => {
+                                        const subItemText = [
+                                            subItem.name,
+                                            subItem.description,
+                                            subItem.memo,
+                                            ...(subItem.keywords || []),
+                                            ...(subItem.pitfalls || [])
+                                        ].join(' ').toLowerCase();
+                                        return keywords.every(k => subItemText.includes(k));
+                                    });
+
+                                    const entryText = [entry.item1, entry.description, entry.memo].join(' ').toLowerCase();
+                                    const entryMatches = keywords.every(k => entryText.includes(k));
+
+                                    if (matchingSubItems.length > 0) {
+                                        return { ...entry, subItems: matchingSubItems };
+                                    }
+                                    if(entryMatches) {
+                                        return { ...entry, subItems: [] };
+                                    }
+
+                                    return null;
+                                }).filter(Boolean);
+                            }
+                        }
+                        
+                        processedData.sort((a, b) => a.item1.localeCompare(b.item1, 'ja'));
+                        
+                        return processedData;
+                    },
+                    renderNav() {
+                        const { navScrollArea } = App.elements;
+                        const { dataStore, ui } = App.state;
+                        
+                        const navData = [...dataStore].sort((a, b) => a.item1.localeCompare(b.item1, 'ja'));
+
+                        navScrollArea.innerHTML = '';
+                        const fragment = document.createDocumentFragment();
+                        
+                        navData.forEach(entry => {
+                            const item1Id = `item1-${entry.id}`;
+                            const navItem = document.createElement('a');
+                            navItem.href = `#${item1Id}`;
+                            navItem.className = 'nav-item block text-gray-300 hover:bg-blue-600 hover:text-white font-bold rounded-lg transition-colors flex items-center';
+                            
+                            const isChecked = ui.selectedItems.has(`c_${entry.id}`);
+                            const starIcon = entry.isFavorite ? `<i class="fas fa-star text-yellow-400 mr-2"></i>` : '';
+                            
+                            navItem.innerHTML = `<input type="checkbox" class="nav-item-checkbox" data-type="item1" data-id="${entry.id}" ${isChecked ? 'checked' : ''}> ${starIcon}${entry.item1}`;
+                            navItem.title = entry.item1;
+                            navItem.querySelector('.nav-item-checkbox').addEventListener('click', e => e.stopPropagation());
+                            navItem.addEventListener('click', (e) => { 
+                                e.preventDefault(); 
+                                const targetEl = document.getElementById(item1Id);
+                                if (targetEl) targetEl.scrollIntoView({ behavior: 'smooth' }); 
+                                App.components.sidebar.toggle(false);
+                            });
+                            fragment.appendChild(navItem);
+                        });
+                        navScrollArea.appendChild(fragment);
+                    },
+                    renderContent(data) {
+                        const { contentArea } = App.elements;
+                        const { searchTerm, activeKeywords } = App.state.filters;
+                        
+                        contentArea.innerHTML = '';
+                        if (data.length === 0 && !App.state.isLoading) {
+                            contentArea.innerHTML = `<div class="text-center p-8 text-gray-400"><i class="fas fa-folder-open fa-3x mb-4"></i><p>データがありません。<br>「+」ボタンから新しい項目を追加してください。</p></div>`;
+                            return;
+                        }
+                        
+                        const fragment = document.createDocumentFragment();
+                        data.forEach(entry => {
+                            const originalData = App.state.dataStore.find(d => d.id === entry.id);
+                             if (!originalData) return;
+                            const item1Id = `item1-${entry.id}`;
+                            const isItem1Checked = App.state.ui.selectedItems.has(`c_${entry.id}`);
+                            const entryDiv = document.createElement('div');
+                            entryDiv.className = 'content-card mb-6 bg-gray-800 rounded-xl shadow-md p-4';
+                            entryDiv.id = item1Id;
+                            
+                            const memoHTML = originalData.memo ? `<div class="mt-4 pl-6 text-sm text-amber-300 bg-gray-900/50 p-3 rounded-lg"><i class="fas fa-pencil-alt fa-fw mr-2 text-amber-400"></i>${App.utils.highlightText(originalData.memo, searchTerm).replace(/\n/g, '<br>')}</div>` : '';
+                            const favoriteClass = originalData.isFavorite ? 'fas text-yellow-400' : 'far text-gray-500';
+            
+                            const subItemsHTML = (entry.subItems || []).map(subItem => { 
+                                const originalSubItem = (originalData.subItems || []).find(d => d.name === subItem.name) || {};
+                                const subItemFavoriteClass = originalSubItem.isFavorite ? 'fas text-yellow-400' : 'far text-gray-500';
+                                const subItemMemoHTML = subItem.memo ? `<div class="mt-3 text-sm text-amber-300 bg-gray-900/50 p-2 rounded-lg"><i class="fas fa-pencil-alt fa-fw mr-2 text-amber-400"></i>${App.utils.highlightText(subItem.memo, searchTerm).replace(/\n/g, '<br>')}</div>` : '';
+                                
+                                const keywordTagsHTML = (subItem.keywords || []).map(k => {
+                                    const count = App.state.globalKeywordCounts.get(k) || 0;
+                                    const countHTML = count > 1 ? ` <span class="text-red-400 font-bold">(${count})</span>` : '';
+                                    return `<span class="content-keyword-tag bg-gray-700 text-sm text-gray-200 rounded-full px-3 py-1 hover:bg-gray-500 ${activeKeywords.has(k) ? 'active' : ''}">${App.utils.highlightText(k, searchTerm)}${countHTML}</span>`;
+                                }).join('');
+
+                                return `
+                                    <div class="pl-4 border-l-4 border-gray-700">
+                                        <div class="flex items-center justify-between">
+                                            <div class="flex items-center">
+                                                <h3 class="text-lg font-semibold text-teal-400">${App.utils.highlightText(subItem.name, searchTerm)}</h3>
+                                            </div>
+                                            <button class="favorite-subitem-btn text-lg" data-item1-id="${entry.id}" data-item2-name="${subItem.name}" title="お気に入り登録"><i class="${subItemFavoriteClass} fa-star"></i></button>
+                                        </div>
+                                        <div class="mt-2 pl-8">
+                                            <p class="text-sm text-gray-400 mt-1">${App.utils.highlightText(subItem.description || '', searchTerm)}</p>
+                                            ${subItemMemoHTML}
+                                            <h4 class="font-bold text-sm text-gray-300 mt-3"><i class="fas fa-lightbulb text-yellow-400 mr-2"></i>Keywords</h4><div class="flex flex-wrap gap-2 mt-1">${keywordTagsHTML}</div>
+                                            <h4 class="font-bold text-sm text-gray-300 mt-3"><i class="fas fa-exclamation-triangle text-red-400 mr-2"></i>Pitfalls</h4><ul class="list-disc list-inside mt-1 text-sm text-gray-300 space-y-1">${(subItem.pitfalls || []).map(p => `<li>${App.utils.highlightText(p, searchTerm)}</li>`).join('')}</ul>
+                                        </div>
+                                    </div>`;
+                            }).join('<div class="my-4"></div>');
+
+                            entryDiv.innerHTML = `
+                                <div class="flex justify-between items-center">
+                                    <div class="flex items-center">
+                                        <input type="checkbox" class="item-checkbox" data-type="item1" data-id="${entry.id}" ${isItem1Checked ? 'checked' : ''}>
+                                        <h2 class="text-xl md:text-2xl font-bold text-blue-400">${App.utils.highlightText(originalData.item1, searchTerm)}</h2>
+                                    </div>
+                                    <div class="flex items-center">
+                                        <button class="favorite-btn text-xl mr-4" data-id="${entry.id}" title="お気に入り登録"><i class="${favoriteClass} fa-star"></i></button>
+                                        <button class="edit-btn text-gray-400 hover:text-white" data-id="${entry.id}"><i class="fas fa-edit"></i></button>
+                                    </div>
+                                </div>
+                                <p class="text-sm text-gray-400 mt-1 ml-10">${App.utils.highlightText(originalData.description || '', searchTerm)}</p>
+                                ${memoHTML}
+                                <div class="mt-4 space-y-4 pl-6">${subItemsHTML}</div>`;
+                            fragment.appendChild(entryDiv);
+                        });
+                        contentArea.appendChild(fragment);
+                    },
+                    renderKeywordsPanel(dataToRender) {
+                        const { keywordsPanelContentArea } = App.elements;
+                        const { filters, ui, globalKeywordCounts } = App.state;
+
+                        if (!keywordsPanelContentArea) return;
+                        
+                        keywordsPanelContentArea.innerHTML = '';
+                        const fragment = document.createDocumentFragment();
+
+                        const sortContainer = document.createElement('div');
+                        sortContainer.className = 'flex items-center justify-between gap-2 mb-4 p-2 bg-gray-900/50 rounded-lg';
+                        sortContainer.innerHTML = `
+                            <label class="text-sm font-medium text-gray-300">並び順:</label>
+                            <div class="flex items-center bg-gray-700 rounded-lg p-1 text-xs">
+                                <button data-sort="name" class="keyword-sort-btn px-3 py-1 rounded-md hover:bg-gray-600">名前順</button>
+                                <button data-sort="count" class="keyword-sort-btn px-3 py-1 rounded-md hover:bg-gray-600">数が多い順</button>
+                            </div>
+                        `;
+                        sortContainer.querySelector(`.keyword-sort-btn[data-sort="${filters.keywordSortBy}"]`).classList.add('active');
+                        sortContainer.querySelectorAll('.keyword-sort-btn').forEach(btn => {
+                            btn.onclick = () => {
+                                App.state.filters.keywordSortBy = btn.dataset.sort;
+                                App.renderer.renderAll();
+                            };
+                        });
+                        fragment.appendChild(sortContainer);
+                        
+                        const keywordCounts = new Map();
+                        const selectedItem1Ids = new Set([...ui.selectedItems].filter(item => item.startsWith('c_')).map(item => item.split('_')[1]));
+                        const sourceData = selectedItem1Ids.size > 0 
+                            ? App.state.dataStore.filter(entry => selectedItem1Ids.has(entry.id))
+                            : App.state.dataStore; 
+
+                        sourceData.forEach(entry => {
+                            (entry.subItems || []).forEach(d => {
+                                (d.keywords || []).forEach(k => {
+                                    keywordCounts.set(k, (keywordCounts.get(k) || 0) + 1);
+                                });
+                            });
+                        });
+                        
+                        const allAvailableKeywords = new Set();
+                        dataToRender.forEach(entry => (entry.subItems || []).forEach(d => (d.keywords || []).forEach(k => allAvailableKeywords.add(k))));
+
+                        if (allAvailableKeywords.size > 0) {
+                            let sortedKeywords = [...allAvailableKeywords];
+                            if (filters.keywordSortBy === 'name') {
+                                sortedKeywords.sort((a, b) => a.localeCompare(b, 'ja'));
+                            } else { // count
+                                sortedKeywords.sort((a, b) => {
+                                    const countA = globalKeywordCounts.get(a) || 0;
+                                    const countB = globalKeywordCounts.get(b) || 0;
+                                    if (countB !== countA) return countB - countA;
+                                    return a.localeCompare(b, 'ja'); // tie-breaker
+                                });
+                            }
+
+                            const keywordTags = document.createElement('div');
+                            keywordTags.className = 'flex flex-wrap gap-2';
+                            sortedKeywords.forEach(keyword => {
+                                const tag = document.createElement('span');
+                                const count = keywordCounts.get(keyword) || 0;
+                                let tagContent = keyword;
+                                if (count > 0) {
+                                    tagContent += ` <span class="text-red-400 font-bold">(${count})</span>`;
+                                }
+                                tag.className = `keyword-tag bg-gray-700 hover:bg-gray-600 text-sm py-1 px-3 rounded-full transition-colors ${filters.activeKeywords.has(keyword) ? 'active' : ''}`;
+                                tag.innerHTML = tagContent;
+                                tag.onclick = () => App.handlers.handleKeywordTagClick(keyword);
+                                keywordTags.appendChild(tag);
+                            });
+                            fragment.appendChild(keywordTags);
+                        }
+
+                        const controlsContainer = document.createElement('div');
+                        controlsContainer.className = "mt-4 pt-4 border-t border-gray-700 flex flex-col items-center gap-3";
+                        
+                        if (filters.activeKeywords.size > 0) {
+                            const clearBtn = App.utils.createButton('<i class="fas fa-times-circle mr-1"></i> フィルター解除', 'text-sm text-red-500 hover:text-red-400 flex items-center', () => App.handlers.handleClearKeywordFilter());
+                            controlsContainer.appendChild(clearBtn);
+                        }
+                        
+                        let subItemCount = 0;
+                        ui.selectedItems.forEach(itemId => { if (itemId.startsWith('d_')) subItemCount++; });
+                
+                        if (subItemCount >= 2) {
+                            const compareBtn = App.utils.createButton('<i class="fas fa-exchange-alt mr-2"></i>選択した項目2を比較', 'w-full text-sm bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center', () => App.components.compareModal.open());
+                            controlsContainer.appendChild(compareBtn);
+                        }
+                
+                        if (controlsContainer.children.length > 0) {
+                           fragment.appendChild(controlsContainer);
+                        }
+                        
+                        keywordsPanelContentArea.appendChild(fragment);
+                    },
+                    renderKeywordSwitch() {
+                        const { logicSwitchContainer } = App.elements;
+                        const { keywordMode } = App.state.filters;
+                        logicSwitchContainer.dataset.mode = keywordMode;
+                        const labels = logicSwitchContainer.querySelectorAll('.switch-label');
+                        labels[0].classList.toggle('active-logic', keywordMode === 'OR');
+                        labels[1].classList.toggle('active-logic', keywordMode === 'AND');
+                    },
+                    setupIntersectionObserver() {
+                        if (App.state.intersectionObserver) App.state.intersectionObserver.disconnect();
+                        
+                        const options = { root: App.elements.contentArea, rootMargin: '0px 0px -90% 0px', threshold: 0 };
+                        
+                        App.state.intersectionObserver = new IntersectionObserver((entries) => {
+                             const intersectingEntry = entries.find(e => e.isIntersecting);
+                             if (intersectingEntry) {
+                                 const navLink = App.elements.navScrollArea.querySelector(`a[href="#${intersectingEntry.target.id}"]`);
+                                 if (navLink) {
+                                     document.querySelectorAll('.nav-item').forEach(link => link.classList.remove('active-nav'));
+                                     navLink.classList.add('active-nav');
+                                 }
+                             }
+                        }, options);
+                        document.querySelectorAll('.content-card').forEach(card => App.state.intersectionObserver.observe(card));
+                    },
+                    search: {
+                        collectAndNavigateHighlights() {
+                            const { ui, filters } = App.state;
+                            
+                            this.unhighlight();
+        
+                            if (!filters.searchTerm) {
+                                ui.highlightedElements = [];
+                                ui.currentHighlightIndex = -1;
+                                this.updateNav();
+                                return;
+                            }
+        
+                            ui.highlightedElements = Array.from(App.elements.contentArea.querySelectorAll('.highlight'));
+                            
+                            if (ui.highlightedElements.length > 0) {
+                                ui.currentHighlightIndex = -1; 
+                                this.navigateToHighlight(1);
+                            } else {
+                                ui.currentHighlightIndex = -1;
+                                this.updateNav();
+                            }
+                        },
+        
+                        navigateToHighlight(direction) {
+                            const { ui } = App.state;
+                            const { highlightedElements } = ui;
+                            if (highlightedElements.length === 0) return;
+        
+                            if (ui.currentHighlightIndex >= 0 && highlightedElements[ui.currentHighlightIndex]) {
+                                highlightedElements[ui.currentHighlightIndex].classList.remove('current-highlight');
+                            }
+        
+                            ui.currentHighlightIndex += direction;
+        
+                            if (ui.currentHighlightIndex >= highlightedElements.length) {
+                                ui.currentHighlightIndex = 0;
+                            }
+                            if (ui.currentHighlightIndex < 0) {
+                                ui.currentHighlightIndex = highlightedElements.length - 1;
+                            }
+        
+                            const newElement = highlightedElements[ui.currentHighlightIndex];
+                            if (newElement) {
+                                newElement.classList.add('current-highlight');
+                                newElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                            }
+        
+                            this.updateNav();
+                        },
+                        
+                        unhighlight() {
+                            const current = App.elements.contentArea.querySelector('.current-highlight');
+                            if (current) {
+                                current.classList.remove('current-highlight');
+                            }
+                        },
+        
+                        updateNav() {
+                            const { ui } = App.state;
+                            const { searchCount, searchPrevBtn, searchNextBtn } = App.elements;
+                            const count = ui.highlightedElements.length;
+                            const currentIndex = count > 0 ? ui.currentHighlightIndex + 1 : 0;
+                            
+                            searchCount.textContent = `${currentIndex}/${count}`;
+                            searchPrevBtn.disabled = count === 0;
+                            searchNextBtn.disabled = count === 0;
+                        }
+                    },
+                },
+                // UIコンポーネント
+                components: {
+                    tempMemo: {
+                        init() { this.loadInfo(); this.bindEventListeners(); },
+                        bindEventListeners() {
+                            App.elements.tempMemo.addEventListener('input', (e) => App.utils.saveToStorage(App.config.storageKeys.tempMemo, e.target.value));
+                        },
+                        loadInfo() {
+                            const tempMemo = App.utils.loadFromStorage(App.config.storageKeys.tempMemo, '');
+                            App.elements.tempMemo.value = tempMemo;
+                        }
+                    },
+                    sidebar: {
+                        init() {
+                            App.elements.body.addEventListener('touchstart', e => this.handleTouchStart(e), { passive: true });
+                            App.elements.body.addEventListener('touchmove', e => this.handleTouchMove(e), { passive: false });
+                            App.elements.body.addEventListener('touchend', e => this.handleTouchEnd(e));
+                        },
+                        bindEventListeners() {
+                           App.elements.sidebarToggleBtn.addEventListener('click', () => this.toggle());
+                           App.elements.sidebarBackdrop.addEventListener('click', () => this.toggle(false));
+                        },
+                        handleTouchStart(e) {
+                            const s = App.state.sidebar;
+                            const isOpen = !App.elements.jumpNav.classList.contains('-translate-x-full');
+                            if (!isOpen && e.touches[0].clientX < 40) {
+                                s.isDragging = true;
+                                s.touchStartX = e.touches[0].clientX;
+                            }
+                            if(isOpen && e.target === App.elements.sidebarBackdrop) {
+                                s.isDragging = true;
+                                s.touchStartX = e.touches[0].clientX;
+                            }
+                        },
+                        handleTouchMove(e) {
+                            const s = App.state.sidebar;
+                            if (!s.isDragging) return;
+                            e.preventDefault();
+                            
+                            s.touchCurrentX = e.touches[0].clientX;
+                            const diff = s.touchCurrentX - s.touchStartX;
+                            const navWidth = App.elements.jumpNav.offsetWidth;
+                            const isOpen = !App.elements.jumpNav.classList.contains('-translate-x-full');
+
+                            if (!isOpen && diff > 0) {
+                                App.elements.jumpNav.style.transition = 'none';
+                                App.elements.jumpNav.style.transform = `translateX(${Math.min(diff - navWidth, 0)}px)`;
+                            } else if (isOpen && diff < 0) {
+                                App.elements.jumpNav.style.transition = 'none';
+                                App.elements.jumpNav.style.transform = `translateX(${Math.max(diff, -navWidth)}px)`;
+                            }
+                        },
+                        handleTouchEnd() {
+                            const s = App.state.sidebar;
+                            if (!s.isDragging) return;
+                            s.isDragging = false;
+                            
+                            const diff = s.touchCurrentX - s.touchStartX;
+                            const isOpen = !App.elements.jumpNav.classList.contains('-translate-x-full');
+                            
+                            App.elements.jumpNav.style.transition = '';
+                            App.elements.jumpNav.style.transform = '';
+
+                            if (Math.abs(diff) > App.config.swipeThreshold) this.toggle(!isOpen);
+                             else this.toggle(isOpen);
+                        },
+                        toggle(forceShow) {
+                            const { jumpNav, sidebarBackdrop } = App.elements;
+                            const shouldShow = typeof forceShow === 'boolean' ? forceShow : jumpNav.classList.contains('-translate-x-full');
+                            jumpNav.classList.toggle('-translate-x-full', !shouldShow);
+                            sidebarBackdrop.classList.toggle('hidden', !shouldShow);
+                        }
+                    },
+                    keywordsPanel: {
+                        bindEventListeners() {
+                            App.elements.keywordsPanelToggleBtn.addEventListener('click', () => this.toggle());
+                            App.elements.keywordsPanelCloseBtn.addEventListener('click', () => this.toggle(false));
+                            App.elements.keywordsPanelBackdrop.addEventListener('click', () => this.toggle(false));
+                        },
+                        toggle(forceShow) {
+                            const { keywordsPanelRight, keywordsPanelBackdrop, keywordsPanelToggleBtn } = App.elements;
+                            const shouldShow = typeof forceShow === 'boolean' ? forceShow : keywordsPanelRight.classList.contains('translate-x-full');
+                            keywordsPanelRight.classList.toggle('translate-x-full', !shouldShow);
+                            keywordsPanelBackdrop.classList.toggle('hidden', !shouldShow);
+                            keywordsPanelToggleBtn.classList.toggle('active', shouldShow);
+                        }
+                    },
+                    settings: {
+                        init(){
+                             const showRandom = App.utils.loadFromStorage(App.config.storageKeys.showRandomBtn, false);
+                             App.elements.showRandomBtnToggle.checked = showRandom;
+                             this.toggleRandomButtonVisibility(showRandom);
+                             const fontSize = App.utils.loadFromStorage(App.config.storageKeys.fontSize, 'base');
+                             this.applyFontSize(fontSize);
+                             const keywordMode = App.utils.loadFromStorage(App.config.storageKeys.keywordMode, 'OR');
+                             App.state.filters.keywordMode = keywordMode;
+                             App.renderer.renderKeywordSwitch();
+                        },
+                        bindEventListeners() {
+                           App.elements.settingsModalCloseBtn.addEventListener('click', () => this.close());
+                           App.elements.exportCsvBtn.addEventListener('click', () => this.exportCSV());
+                           App.elements.importCsvBtn.addEventListener('click', () => App.elements.importCsvInput.click());
+                           App.elements.importCsvInput.addEventListener('change', e => this.handleCSVFileSelect(e));
+                           App.elements.showRandomBtnToggle.addEventListener('change', e => this.toggleRandomButtonVisibility(e.target.checked));
+                           App.elements.fontSizeControls.addEventListener('click', e => this.handleFontSizeChange(e));
+                           App.elements.nextCaseBtn.addEventListener('click', () => this.handleNextCase());
+                        },
+                        async handleNextCase() {
+                            const confirmed = await App.utils.customConfirm(
+                                '現在の入力内容をすべてリセットし、次のセッションに移行しますか？',
+                                '次のセッションへ'
+                            );
+                            if (confirmed) {
+                                App.elements.tempMemo.value = '';
+                                App.utils.saveToStorage(App.config.storageKeys.tempMemo, '');
+                                App.state.filters.isFavoritesOnly = false;
+                                App.elements.filterFavoritesBtn.classList.remove('active');
+                                App.handlers.handleClearAllSelections();
+                                this.close();
+                                App.utils.customAlert('次のセッションの準備ができました。');
+                            }
+                        },
+                        open() { App.utils.showModal(App.elements.settingsModal); },
+                        close() { App.utils.hideModal(App.elements.settingsModal); },
+                        toggleRandomButtonVisibility(isVisible) {
+                             App.utils.saveToStorage(App.config.storageKeys.showRandomBtn, isVisible);
+                             App.elements.randomItem1Btn.classList.toggle('hidden', !isVisible);
+                             App.elements.randomItem2Btn.classList.toggle('hidden', !isVisible);
+                        },
+                        handleFontSizeChange(e) {
+                            const btn = e.target.closest('.font-size-btn');
+                            if(btn) this.applyFontSize(btn.dataset.size);
+                        },
+                        applyFontSize(size) {
+                            App.elements.html.className = `text-${size}`;
+                            App.elements.fontSizeControls.querySelectorAll('.font-size-btn').forEach(b => {
+                                b.classList.toggle('active', b.dataset.size === size);
+                            });
+                            App.utils.saveToStorage(App.config.storageKeys.fontSize, size);
+                        },
+                        exportCSV() {
+                            const data = App.state.dataStore;
+                            if (data.length === 0) {
+                                App.utils.customAlert('エクスポートするデータがありません。');
+                                return;
+                            }
+
+                            const flattenedData = [];
+                            data.forEach(entry => {
+                                if (entry.subItems && entry.subItems.length > 0) {
+                                    entry.subItems.forEach(subItem => {
+                                        flattenedData.push({
+                                            item1: entry.item1 || '',
+                                            item1_description: entry.description || '',
+                                            item1_memo: entry.memo || '',
+                                            item2: subItem.name || '',
+                                            item2_description: subItem.description || '',
+                                            keywords: (subItem.keywords || []).join(';'),
+                                            pitfalls: (subItem.pitfalls || []).join(';'),
+                                            item2_memo: subItem.memo || ''
+                                        });
+                                    });
+                                } else {
+                                     flattenedData.push({
+                                        item1: entry.item1 || '',
+                                        item1_description: entry.description || '',
+                                        item1_memo: entry.memo || '',
+                                        item2: '', item2_description: '', keywords: '', pitfalls: '', item2_memo: ''
+                                     });
+                                }
+                            });
+                            
+                            const header = Object.keys(flattenedData[0]).join(',');
+                            const csv = flattenedData.map(row => 
+                                Object.values(row).map(value => `"${String(value).replace(/"/g, '""')}"`).join(',')
+                            ).join('\n');
+                            
+                            const csvContent = `${header}\n${csv}`;
+                            const blob = new Blob([`\uFEFF${csvContent}`], { type: 'text/csv;charset=utf-8;' });
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = `fire_investigation_data_${new Date().toISOString().slice(0,10)}.csv`;
+                            a.click();
+                            URL.revokeObjectURL(url);
+                        },
+                        handleCSVFileSelect(event) {
+                            const file = event.target.files[0];
+                            if (!file) return;
+                            const reader = new FileReader();
+                            reader.onload = async (e) => {
+                                try {
+                                    const csvString = e.target.result;
+                                    const confirmed = await App.utils.customConfirm('現在のデータをすべて上書きして、CSVからインポートしますか？この操作は元に戻せません。', 'インポートの確認');
+                                    if (confirmed) {
+                                        this.importCSV(csvString);
+                                    }
+                                } catch (error) {
+                                    App.utils.customAlert('ファイルの読み込みに失敗しました。');
+                                    console.error("Import error:", error);
+                                }
+                            };
+                             reader.onerror = () => {
+                                App.utils.customAlert('ファイルの読み込み中にエラーが発生しました。');
+                            };
+                            reader.readAsText(file, 'Shift_JIS');
+                        },
+                        async importCSV(csvString) {
+                            try {
+                                const lines = csvString.trim().split('\n');
+                                const header = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+                                const rows = lines.slice(1).map(line => {
+                                    const data = line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
+                                    const rowData = {};
+                                    header.forEach((key, i) => {
+                                        rowData[key] = (data[i] || '').trim().replace(/(^"|"$)/g, '').replace(/""/g, '"');
+                                    });
+                                    return rowData;
+                                });
+
+                                const groupedByItem1 = rows.reduce((acc, row) => {
+                                    const item1Name = row.item1;
+                                    if (!acc[item1Name]) {
+                                        acc[item1Name] = {
+                                            item1: item1Name,
+                                            description: row.item1_description || '',
+                                            memo: row.item1_memo || '',
+                                            createdAt: new Date().toISOString(),
+                                            updatedAt: new Date().toISOString(),
+                                            isFavorite: false,
+                                            subItems: []
+                                        };
+                                    }
+                                    if (row.item2) {
+                                        acc[item1Name].subItems.push({
+                                            name: row.item2,
+                                            description: row.item2_description || '',
+                                            keywords: (row.keywords || '').split(';').map(k => k.trim()).filter(Boolean),
+                                            pitfalls: (row.pitfalls || '').split(';').map(p => p.trim()).filter(Boolean),
+                                            memo: row.item2_memo || '',
+                                            isFavorite: false
+                                        });
+                                    }
+                                    return acc;
+                                }, {});
+
+                                const finalData = Object.values(groupedByItem1);
+
+                                const collectionRef = App.services.db.getCollectionRef();
+                                if (!collectionRef) return;
+
+                                const snapshot = await getDocs(collectionRef);
+                                const deleteBatch = writeBatch(App.state.db);
+                                snapshot.docs.forEach(d => deleteBatch.delete(d.ref));
+                                await deleteBatch.commit();
+
+                                const addBatch = writeBatch(App.state.db);
+                                finalData.forEach(item => {
+                                    const docRef = doc(collectionRef);
+                                    addBatch.set(docRef, item);
+                                });
+                                await addBatch.commit();
+                                
+                                App.utils.customAlert('データのインポートが完了しました。');
+                                this.close();
+
+                            } catch (error) {
+                                App.utils.customAlert('CSVデータの解析またはインポート中にエラーが発生しました。ファイルの形式を確認してください。');
+                                console.error("CSV Import failed:", error);
+                            }
+                        }
+                    },
+                    searchHistory: {
+                        bindEventListeners() {
+                            App.elements.searchHistoryBtn.addEventListener('click', e => { e.stopPropagation(); this.toggleDropdown(); });
+                        },
+                        getKey() { return `fire_app_search_history_${App.config.appId}`; },
+                        get() { return JSON.parse(localStorage.getItem(this.getKey())) || []; },
+                        save(term) {
+                            if (!term) return;
+                            let history = this.get();
+                            history = history.filter(item => item !== term);
+                            history.unshift(term);
+                            if (history.length > App.config.maxHistoryItems) history.pop();
+                            localStorage.setItem(this.getKey(), JSON.stringify(history));
+                        },
+                        clear() {
+                            localStorage.removeItem(this.getKey());
+                            this.render();
+                        },
+                        render() {
+                            const { searchHistoryDropdown } = App.elements;
+                            const history = this.get();
+                            searchHistoryDropdown.innerHTML = '';
+                            if (history.length === 0) {
+                                searchHistoryDropdown.innerHTML = '<div class="p-3 text-sm text-gray-500 text-center">検索履歴はありません。</div>';
+                                return;
+                            }
+                            const list = document.createElement('ul');
+                            history.forEach(term => {
+                                const item = document.createElement('li');
+                                item.className = 'px-4 py-2 hover:bg-gray-700 cursor-pointer text-gray-200';
+                                item.textContent = term;
+                                item.addEventListener('click', () => { App.elements.searchInput.value = term; App.handlers.handleSearch(); App.utils.hide(searchHistoryDropdown); });
+                                list.appendChild(item);
+                            });
+                            searchHistoryDropdown.appendChild(list);
+                            const footer = document.createElement('div');
+                            footer.className = 'p-2 border-t border-gray-700 text-center';
+                            const clearButton = App.utils.createButton('履歴を消去', 'text-sm text-red-500 hover:text-red-400', e => { e.stopPropagation(); this.clear(); });
+                            footer.appendChild(clearButton);
+                            searchHistoryDropdown.appendChild(footer);
+                        },
+                        toggleDropdown() {
+                             if(App.elements.searchHistoryDropdown.classList.contains('hidden')) {
+                                this.render();
+                                App.utils.show(App.elements.searchHistoryDropdown);
+                             } else {
+                                App.utils.hide(App.elements.searchHistoryDropdown);
+                             }
+                        }
+                    },
+                    dataModal: {
+                        dragged: null,
+                        bindEventListeners() {
+                            const el = App.elements;
+                            el.modalCloseBtn.addEventListener('click', () => this.close());
+                            el.addSubItemBtn.addEventListener('click', () => this.addSubItemForm());
+                            el.dataForm.addEventListener('submit', e => { e.preventDefault(); this.submit(); });
+                            el.deleteBtn.addEventListener('click', () => this.delete());
+                            
+                            el.subItemsContainer.addEventListener('dragstart', e => this.onDragStart(e));
+                            el.subItemsContainer.addEventListener('dragend', e => this.onDragEnd(e));
+                            el.subItemsContainer.addEventListener('dragover', e => this.onDragOver(e));
+                        },
+                        onDragStart(e) {
+                            if (e.target.classList.contains('subitem-form-group')) {
+                                this.dragged = e.target;
+                                e.dataTransfer.effectAllowed = 'move';
+                                e.dataTransfer.setData('text/plain', null);
+                                setTimeout(() => {
+                                    this.dragged.classList.add('dragging');
+                                }, 0);
+                            }
+                        },
+                        onDragEnd() {
+                            if (this.dragged) {
+                                this.dragged.classList.remove('dragging');
+                            }
+                            this.dragged = null;
+                        },
+                        onDragOver(e) {
+                            e.preventDefault();
+                            const container = App.elements.subItemsContainer;
+                            if (!this.dragged || !container.contains(this.dragged)) return;
+
+                            const afterElement = this.getDragAfterElement(container, e.clientY);
+                            if (afterElement == null) {
+                                container.appendChild(this.dragged);
+                            } else {
+                                container.insertBefore(this.dragged, afterElement);
+                            }
+                        },
+                        getDragAfterElement(container, y) {
+                            const draggableElements = [...container.querySelectorAll('.subitem-form-group:not(.dragging)')];
+                            return draggableElements.reduce((closest, child) => {
+                                const box = child.getBoundingClientRect();
+                                const offset = y - box.top - box.height / 2;
+                                if (offset < 0 && offset > closest.offset) {
+                                    return { offset: offset, element: child };
+                                } else {
+                                    return closest;
+                                }
+                            }, { offset: Number.NEGATIVE_INFINITY }).element;
+                        },
+                        openForNew() {
+                             const { dataModal, modalTitle, dataForm, subItemsContainer, deleteBtn } = App.elements;
+                             modalTitle.textContent = '新規項目1の追加';
+                             dataForm.reset();
+                             dataForm.querySelector('#entry-id').value = '';
+                             subItemsContainer.innerHTML = '';
+                             this.addSubItemForm();
+                             App.utils.hide(deleteBtn);
+                             App.utils.showModal(dataModal);
+                        },
+                        openForEdit(id) {
+                            const entry = App.state.dataStore.find(e => e.id === id);
+                            if (!entry) return;
+                             const { dataModal, modalTitle, item1NameInput, item1DescInput, item1MemoInput, subItemsContainer, deleteBtn, entryIdInput } = App.elements;
+                             modalTitle.textContent = '項目1の編集';
+                             entryIdInput.value = id;
+                             item1NameInput.value = entry.item1;
+                             item1DescInput.value = entry.description || '';
+                             item1MemoInput.value = entry.memo || '';
+                             subItemsContainer.innerHTML = '';
+                             (entry.subItems || []).forEach(d => this.addSubItemForm(d));
+                             App.utils.show(deleteBtn);
+                             App.utils.showModal(dataModal);
+                        },
+                        close() { App.utils.hideModal(App.elements.dataModal); },
+                        addSubItemForm(subItem = {}) {
+                            const container = App.elements.subItemsContainer;
+                            const subItemDiv = document.createElement('div');
+                            subItemDiv.className = 'subitem-form-group bg-gray-700/50 p-4 pl-10 rounded-lg space-y-2 relative';
+                            subItemDiv.draggable = true;
+                            const subItemId = `subitem_${Date.now()}_${Math.random()}`;
+                            subItemDiv.innerHTML = `
+                                <span class="drag-handle absolute top-1/2 -translate-y-1/2 left-2 text-gray-500 hover:text-white" title="ドラッグして並び替え"><i class="fas fa-grip-vertical fa-lg"></i></span>
+                                <button type="button" class="remove-subitem-btn absolute top-2 right-2 text-gray-500 hover:text-red-500"><i class="fas fa-times-circle"></i></button>
+                                <div><label class="text-sm">項目2の名前</label><input type="text" name="${subItemId}_name" class="w-full bg-gray-600 p-2 rounded-md mt-1" value="${subItem.name || ''}" required></div>
+                                <div><label class="text-sm">説明</label><textarea name="${subItemId}_description" rows="2" class="w-full bg-gray-600 p-2 rounded-md mt-1">${subItem.description || ''}</textarea></div>
+                                <div><label class="text-sm">Keywords (カンマ区切り)</label><input type="text" name="${subItemId}_keywords" class="w-full bg-gray-600 p-2 rounded-md mt-1" value="${(subItem.keywords || []).join(', ')}"></div>
+                                <div><label class="text-sm">Pitfalls (カンマ区切り)</label><input type="text" name="${subItemId}_pitfalls" class="w-full bg-gray-600 p-2 rounded-md mt-1" value="${(subItem.pitfalls || []).join(', ')}"></div>
+                                <div><label class="text-sm">項目2のメモ</label><textarea name="${subItemId}_memo" rows="2" class="w-full bg-gray-600 p-2 rounded-md mt-1">${subItem.memo || ''}</textarea></div>`;
+                            subItemDiv.querySelector('.remove-subitem-btn').onclick = () => subItemDiv.remove();
+                            container.appendChild(subItemDiv);
+                        },
+                        async submit() {
+                            const form = App.elements.dataForm;
+                            const entryId = form.querySelector('#entry-id').value;
+                            const subItems = [];
+                            form.querySelectorAll('.subitem-form-group').forEach(group => {
+                                const nameInput = group.querySelector('input[name$="_name"]');
+                                if(!nameInput || !nameInput.value) return;
+                                const subItem = {
+                                    name: nameInput.value.trim(),
+                                    description: group.querySelector('textarea[name$="_description"]').value.trim(),
+                                    keywords: group.querySelector('input[name$="_keywords"]').value.split(',').map(k => k.trim()).filter(Boolean),
+                                    pitfalls: group.querySelector('input[name$="_pitfalls"]').value.split(',').map(p => p.trim()).filter(Boolean),
+                                    memo: group.querySelector('textarea[name$="_memo"]').value.trim(),
+                                    isFavorite: false,
+                                };
+                                subItems.push(subItem);
+                            });
+                            const data = {
+                                item1: form.querySelector('#item1-name').value,
+                                description: form.querySelector('#item1-description').value,
+                                memo: form.querySelector('#item1-memo').value,
+                                subItems: subItems,
+                                updatedAt: new Date().toISOString()
+                            };
+                            try {
+                                const collectionRef = App.services.db.getCollectionRef();
+                                if (entryId) {
+                                    const existingData = App.state.dataStore.find(d => d.id === entryId);
+                                    data.isFavorite = existingData?.isFavorite || false;
+                                    if (existingData?.createdAt) {
+                                        data.createdAt = existingData.createdAt;
+                                    }
+                                    data.subItems.forEach(d => {
+                                        const existingSubItem = (existingData.subItems || []).find(ed => ed.name === d.name);
+                                        if (existingSubItem) d.isFavorite = existingSubItem.isFavorite;
+                                    });
+                                    await setDoc(doc(collectionRef, entryId), data);
+                                    App.utils.customAlert('データが更新されました。');
+                                } else {
+                                    data.createdAt = new Date().toISOString();
+                                    data.isFavorite = false;
+                                    await addDoc(collectionRef, data);
+                                    App.utils.customAlert('データが追加されました。');
+                                }
+                                this.close();
+                            } catch(error) {
+                                console.error("Error saving data:", error);
+                                App.utils.customAlert('データの保存に失敗しました。');
+                            }
+                        },
+                        async delete() {
+                            const entryId = App.elements.entryIdInput.value;
+                            if (!entryId) return;
+
+                            const confirmed = await App.utils.customConfirm('この項目1を本当に削除しますか？', '削除の確認');
+                            if (confirmed) {
+                                const originalDataStore = [...App.state.dataStore];
+                                try {
+                                    this.close();
+                                    App.state.dataStore = App.state.dataStore.filter(entry => entry.id !== entryId);
+                                    App.renderer.renderAll();
+                                    App.utils.customAlert('データが削除されました。');
+                                    await deleteDoc(doc(App.services.db.getCollectionRef(), entryId));
+                                } catch (error) {
+                                    console.error("Error deleting data:", error);
+                                    App.state.dataStore = originalDataStore; 
+                                    App.renderer.renderAll();
+                                    App.utils.customAlert('データの削除に失敗しました。');
+                                }
+                            }
+                        }
+                    },
+                    compareModal: {
+                        init(){this.bindEventListeners()},
+                        open() {
+                            const { compareModal, compareModalBody } = App.elements;
+                            compareModalBody.innerHTML = '';
+                            const selectedSubItems = [];
+                            App.state.ui.selectedItems.forEach(itemId => {
+                                if (!itemId.startsWith('d_')) return;
+                                const parts = itemId.split('_');
+                                const entryId = parts[1];
+                                const subItemName = parts.slice(2).join(' ').replace(/_/g, ' ');
+                                const entry = App.state.dataStore.find(e => e.id === entryId);
+                                if (entry) {
+                                    const subItem = (entry.subItems || []).find(d => d.name === subItemName);
+                                    if (subItem) selectedSubItems.push({ ...subItem, item1: entry.item1 });
+                                }
+                            });
+                            if (selectedSubItems.length < 2) {
+                                App.utils.customAlert('比較するには、項目2を2つ以上選択してください。');
+                                return;
+                            }
+                            const allKeywords = [...new Set(selectedSubItems.flatMap(d => d.keywords || []))];
+                            const allPitfalls = [...new Set(selectedSubItems.flatMap(d => d.pitfalls || []))];
+                            let tableHTML = `<div class="overflow-x-auto"><table class="w-full text-left border-collapse">`;
+                            tableHTML += '<thead><tr class="bg-gray-700"><th class="p-2 border border-gray-600">特徴</th>';
+                            selectedSubItems.forEach(d => {
+                                tableHTML += `<th class="p-2 border border-gray-600 text-teal-400">${d.name} <span class="text-xs text-gray-400">(${d.item1})</span></th>`;
+                            });
+                            tableHTML += '</tr></thead>';
+                            tableHTML += '<tbody>';
+                            tableHTML += `<tr><td class="p-2 border border-gray-600 font-bold bg-gray-700/50" colspan="${selectedSubItems.length + 1}">Keywords</td></tr>`;
+                            allKeywords.forEach(keyword => {
+                                tableHTML += `<tr><td class="p-2 border border-gray-600">${keyword}</td>`;
+                                selectedSubItems.forEach(d => {
+                                    const hasKeyword = (d.keywords || []).includes(keyword);
+                                    tableHTML += `<td class="p-2 border border-gray-600 text-center">${hasKeyword ? '<i class="fas fa-check text-green-400"></i>' : '<i class="fas fa-times text-red-400"></i>'}</td>`;
+                                });
+                                tableHTML += '</tr>';
+                            });
+                            tableHTML += `<tr><td class="p-2 border border-gray-600 font-bold bg-gray-700/50" colspan="${selectedSubItems.length + 1}">Pitfalls</td></tr>`;
+                            allPitfalls.forEach(pitfall => {
+                                tableHTML += `<tr><td class="p-2 border border-gray-600">${pitfall}</td>`;
+                                selectedSubItems.forEach(d => {
+                                    const hasPitfall = (d.pitfalls || []).includes(pitfall);
+                                    tableHTML += `<td class="p-2 border border-gray-600 text-center">${hasPitfall ? '<i class="fas fa-check text-green-400"></i>' : ''}</td>`;
+                                });
+                                tableHTML += '</tr>';
+                            });
+                            tableHTML += '</tbody></table></div>';
+                            compareModalBody.innerHTML = tableHTML;
+                            App.utils.showModal(compareModal);
+                        },
+                        bindEventListeners() {
+                             App.elements.compareModalCloseBtn.addEventListener('click', () => App.utils.hideModal(App.elements.compareModal));
+                        }
+                    },
+                },
+                // ユーティリティ関数
+                utils: {
+                    initFirebaseConfig() {
+                        if (typeof __firebase_config !== 'undefined' && __firebase_config) {
+                            try { App.config.firebaseConfig = JSON.parse(__firebase_config); } catch(e) { console.error("Failed to parse firebase config:", e); }
+                        } 
+                        if (!App.config.firebaseConfig) {
+                             App.config.firebaseConfig = {
+                                // Fallback config. Replace with your actual Firebase config if needed.
+                                apiKey: "AIzaSyCIZlnSQM-k362oQe7IECZE9ZRwGy_QgWo",
+                                authDomain: "fire-investigation-app.firebaseapp.com",
+                                projectId: "fire-investigation-app",
+                                storageBucket: "fire-investigation-app.firebasestorage.app",
+                                messagingSenderId: "309532040816",
+                                appId: "1:309532040816:web:98db62218770431d059eb5",
+                            };
+                        }
+                        App.config.appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+                    },
+                    show(el) { if(el) el.classList.remove('hidden'); },
+                    hide(el) { if(el) el.classList.add('hidden'); },
+                    showModal(el) { if(el) { el.classList.remove('hidden'); el.style.opacity = 1; el.style.transform = 'scale(1)';} },
+                    hideModal(el) { if(el) { el.style.opacity = 0; el.style.transform = 'scale(0.95)'; setTimeout(() => el.classList.add('hidden'), 300); }},
+                    createButton(html, classes, onClick) {
+                        const btn = document.createElement('button');
+                        btn.type = 'button';
+                        btn.innerHTML = html;
+                        btn.className = classes;
+                        if(onClick) btn.onclick = onClick;
+                        return btn;
+                    },
+                    customAlert(message, title = '情報') {
+                        return new Promise((resolve) => {
+                            const { confirmModal, confirmTitle, confirmMessage, alertIcon, confirmButtons } = App.elements;
+                            if(!confirmModal) { resolve(true); return; }
+                            confirmTitle.textContent = title;
+                            confirmMessage.textContent = message;
+                            alertIcon.innerHTML = `<i class="fas fa-info-circle text-blue-400 text-2xl"></i>`;
+                            confirmButtons.innerHTML = `<button id="alert-ok-btn" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm">OK</button>`;
+                            this.showModal(confirmModal);
+                            document.getElementById('alert-ok-btn').onclick = () => { this.hideModal(confirmModal); resolve(true); };
+                        });
+                    },
+                    customConfirm(message, title = '確認') {
+                        return new Promise((resolve) => {
+                            const { confirmModal, confirmTitle, confirmMessage, alertIcon, confirmButtons } = App.elements;
+                            if(!confirmModal) { resolve(false); return; }
+                            confirmTitle.textContent = title;
+                            confirmMessage.textContent = message;
+                            alertIcon.innerHTML = `<i class="fas fa-exclamation-triangle text-yellow-400 text-2xl"></i>`;
+                            confirmButtons.innerHTML = `
+                                <button id="confirm-cancel-btn" class="mt-3 w-full inline-flex justify-center rounded-md border border-gray-500 shadow-sm px-4 py-2 bg-gray-600 text-base font-medium text-white hover:bg-gray-500 focus:outline-none sm:mt-0 sm:w-auto sm:text-sm">キャンセル</button>
+                                <button id="confirm-ok-btn" class="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none sm:ml-3 sm:w-auto sm:text-sm">実行</button>`;
+                            this.showModal(confirmModal);
+                            document.getElementById('confirm-ok-btn').onclick = () => { this.hideModal(confirmModal); resolve(true); };
+                            document.getElementById('confirm-cancel-btn').onclick = () => { this.hideModal(confirmModal); resolve(false); };
+                        });
+                    },
+                    loadFromStorage(key, defaultValue = null) {
+                        const item = localStorage.getItem(key);
+                        if (item === null) return defaultValue;
+                        try { return JSON.parse(item); } catch (e) { return item; }
+                    },
+                    saveToStorage(key, value) {
+                        localStorage.setItem(key, typeof value === 'object' ? JSON.stringify(value) : value);
+                    },
+                    escapeRegExp(string) {
+                        if (typeof string !== 'string') return '';
+                        return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); 
+                    },
+                    highlightText(text, term) {
+                        if (!term || !text) return String(text); 
+                        const keywords = term.trim().split(/\s+/).filter(Boolean);
+                        if (keywords.length === 0) return String(text);
+                
+                        const regex = new RegExp(keywords.map(k => App.utils.escapeRegExp(k)).join('|'), 'gi');
+                        
+                        return String(text).replace(regex, `<mark class="highlight">$&</mark>`);
+                    },
+                }
+            };
+
+            App.init();
+        });
+    </script>
+</body>
+</html>
